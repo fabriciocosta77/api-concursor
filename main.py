@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api.Rotas import roteador
+from api.Rotas import roteador
         
 app = FastAPI()
 

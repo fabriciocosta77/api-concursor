@@ -1,7 +1,7 @@
 import PyPDF2
 from fastapi import HTTPException
 from openai import OpenAI
-from ..config.APIConfig import OPENAI_API_KEY
+from config.APIConfig import OPENAI_API_KEY
 
 async def EnviaPDF(file):
     try:
