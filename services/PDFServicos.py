@@ -1,43 +1,71 @@
 import PyPDF2
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 import requests
 import json
 
 
-async def EnviaPDF(file):
+def extrair_texto_do_PDF(file)-> str:
     try:
         leitor = PyPDF2.PdfReader(file.file)
-        texto_total = ""
+        texto_total= ""
 
         for pagina in leitor.pages:
             texto = pagina.extract_text()
             if texto:
-                texto_total += texto + "\n"
+                texto_total += texto + '\n'
 
         if not texto_total.strip():
-            raise HTTPException(status_code=400, detail="Não foi possível ler o PDF!")
+            raise ValueError("Não foi possivel extrair o texto do PDF.")
+        
+        return texto_total[:4000]
+    
+    except Exception as e:
+        raise RuntimeError(f"Erro ao ler o PDF: {e}")
 
+def resumo_com_ollama(texto: str) -> str:
+    try:
         response = requests.post(
             'http://localhost:11434/api/generate',
             json={
-                'model' : 'qwen3:1.7b',
-                'prompt' : f'Resuma este arquivo. Seja direto e objetivo: {texto_total}' 
+                'model': 'qwen3:1.7b',
+                'prompt': f'Resuma este arquivo. Seja direto e objetivo:\n\n{texto}'
             },
-            stream=True
+            stream=True,
+            timeout=300
         )
 
-        if response.status_code == 200:
-            for line in response.iter_lines():
-                if line:
-                    try:
-                        data = json.loads(line.decode('utf-8'))
-                        return data.get('response', '') 
-                    except json.JSONDecodeError as e:
-                        return f'\nErro ao decodificar JSON: {e}'
-        else:
-            return response.status_code
+        if response.status_code != 200:
+            raise RuntimeError(f"Erro na API da IA: Status {response.status_code}")
         
+        resposta_completa = ""
 
+        for line in response.iter_lines():
+            if line:
+                try:
+                    data = json.loads(line.decode('utf-8'))
+                    resposta_completa +=  data.get('response', '')
+                except json.JSONDecodeError:
+                    continue
+        
+        return resposta_completa.strip()
     except Exception as e:
-        print(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise RuntimeError(f"Erro ao conectar com a IA: {e}")
+
+
+async def EnviaPDF(file: UploadFile):
+    try:
+        texto = extrair_texto_do_PDF(file)
+        resumo = resumo_com_ollama(texto)
+        return {"Resumo gerado:": resumo}
+    
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    
+    except RuntimeError as re:
+        raise HTTPException(status_code=500, detail=str(re))
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro inesperado: {e}")
+    
+
+
