@@ -1,7 +1,8 @@
 import PyPDF2
 from fastapi import HTTPException
-from openai import OpenAI
-from config.APIConfig import OPENAI_API_KEY
+import requests
+import json
+
 
 async def EnviaPDF(file):
     try:
@@ -16,18 +17,26 @@ async def EnviaPDF(file):
         if not texto_total.strip():
             raise HTTPException(status_code=400, detail="Não foi possível ler o PDF!")
 
-        client = OpenAI(api_key=OPENAI_API_KEY)
-
-        response = client.responses.create(
-            model="gpt-4o",
-            instructions=(
-                "Você é um aplicativo que resume PDFs de editais enviados por clientes. "
-                "Seu objetivo é extrair todas as informações do texto e retornar apenas o resumo da forma mais eficaz e sem omitir informações."
-            ),
-            input="Resuma o seguinte edital, extraindo todas as informações úteis e pertinentes de maneira compreensiva e completa:\n" + texto_total
+        response = requests.post(
+            'http://localhost:11434/api/generate',
+            json={
+                'model' : 'qwen3:1.7b',
+                'prompt' : f'Resuma este arquivo. Seja direto e objetivo: {texto_total}' 
+            },
+            stream=True
         )
 
-        return {"response": response.output_text}
+        if response.status_code == 200:
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        data = json.loads(line.decode('utf-8'))
+                        return data.get('response', '') 
+                    except json.JSONDecodeError as e:
+                        return f'\nErro ao decodificar JSON: {e}'
+        else:
+            return response.status_code
+        
 
     except Exception as e:
         print(e)
