@@ -1,34 +1,71 @@
 import PyPDF2
-from fastapi import HTTPException
-from openai import OpenAI
-from config.APIConfig import OPENAI_API_KEY
+from fastapi import HTTPException, UploadFile
+import requests
+import json
 
-async def EnviaPDF(file):
+
+def extrair_texto_do_PDF(file)-> str:
     try:
         leitor = PyPDF2.PdfReader(file.file)
-        texto_total = ""
+        texto_total= ""
 
         for pagina in leitor.pages:
             texto = pagina.extract_text()
             if texto:
-                texto_total += texto + "\n"
+                texto_total += texto + '\n'
 
         if not texto_total.strip():
-            raise HTTPException(status_code=400, detail="Não foi possível ler o PDF!")
+            raise ValueError("Não foi possivel extrair o texto do PDF.")
+        
+        return texto_total[:4000]
+    
+    except Exception as e:
+        raise RuntimeError(f"Erro ao ler o PDF: {e}")
 
-        client = OpenAI(api_key=OPENAI_API_KEY)
-
-        response = client.responses.create(
-            model="gpt-4o",
-            instructions=(
-                "Você é um aplicativo que resume PDFs de editais enviados por clientes. "
-                "Seu objetivo é extrair todas as informações do texto e retornar apenas o resumo da forma mais eficaz e sem omitir informações."
-            ),
-            input="Resuma o seguinte edital, extraindo todas as informações úteis e pertinentes de maneira compreensiva e completa:\n" + texto_total
+def resumo_com_ollama(texto: str) -> str:
+    try:
+        response = requests.post(
+            'http://localhost:11434/api/generate',
+            json={
+                'model': 'qwen3:1.7b',
+                'prompt': f'Resuma este arquivo. Seja direto e objetivo:\n\n{texto}'
+            },
+            stream=True,
+            timeout=300
         )
 
-        return {"response": response.output_text}
+        if response.status_code != 200:
+            raise RuntimeError(f"Erro na API da IA: Status {response.status_code}")
+        
+        resposta_completa = ""
 
+        for line in response.iter_lines():
+            if line:
+                try:
+                    data = json.loads(line.decode('utf-8'))
+                    resposta_completa +=  data.get('response', '')
+                except json.JSONDecodeError:
+                    continue
+        
+        return resposta_completa.strip()
     except Exception as e:
-        print(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise RuntimeError(f"Erro ao conectar com a IA: {e}")
+
+
+async def EnviaPDF(file: UploadFile):
+    try:
+        texto = extrair_texto_do_PDF(file)
+        resumo = resumo_com_ollama(texto)
+        return {"Resumo gerado:": resumo}
+    
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    
+    except RuntimeError as re:
+        raise HTTPException(status_code=500, detail=str(re))
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro inesperado: {e}")
+    
+
+
