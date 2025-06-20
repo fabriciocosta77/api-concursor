@@ -35,7 +35,7 @@ def resumo_com_ollama(texto: str) -> str:
             stream=True,
             timeout=300
         )
-        print('Resumo pronto')
+        print(response.status_code)
         if response.status_code != 200:
             raise RuntimeError(f"Erro na API da IA: Status {response.status_code}")
         
@@ -58,7 +58,8 @@ async def EnviaPDF(file: UploadFile):
     try:
         texto = extrair_texto_do_PDF(file)
         resumo = resumo_com_ollama(texto)
-        return {"Resumo gerado:": resumo}
+        return {"success":"sucesso",
+                "summary": resumo}
     
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
