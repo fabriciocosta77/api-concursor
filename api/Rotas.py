@@ -5,6 +5,7 @@ roteador = APIRouter()
 
 @roteador.post("/resumo")
 async def RecebePDF(file: UploadFile = File(...)):
+    print('Bateu aqui mano')
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="O arquivo deve ser um PDF legível!")
 

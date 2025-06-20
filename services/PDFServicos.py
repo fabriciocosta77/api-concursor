@@ -17,6 +17,7 @@ def extrair_texto_do_PDF(file)-> str:
         if not texto_total.strip():
             raise ValueError("Não foi possivel extrair o texto do PDF.")
         
+        print('Texto extraido')
         return texto_total[:4000]
     
     except Exception as e:
@@ -24,8 +25,9 @@ def extrair_texto_do_PDF(file)-> str:
 
 def resumo_com_ollama(texto: str) -> str:
     try:
+        print('Mandando texto para a puta q pariu')
         response = requests.post(
-            'http://localhost:11434/api/generate',
+            'http://25.45.91.182:11434/api/generate',
             json={
                 'model': 'qwen3:1.7b',
                 'prompt': f'Resuma este arquivo. Seja direto e objetivo:\n\n{texto}'
@@ -33,7 +35,7 @@ def resumo_com_ollama(texto: str) -> str:
             stream=True,
             timeout=300
         )
-
+        print('Resumo pronto')
         if response.status_code != 200:
             raise RuntimeError(f"Erro na API da IA: Status {response.status_code}")
         
